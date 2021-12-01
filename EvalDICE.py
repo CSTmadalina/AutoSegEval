@@ -93,7 +93,8 @@ for folder in patientFolders:
     ws['F3'] = ("Dice")
     ws['G3'] = ("HD")
     ws['H3'] = ("95HD")
-    ws['I3'] = ("HDmedian")
+    ws['I3'] = ("HD50")
+    ws['J3'] = ("VOLsimilaity")
 
     print( roi_names)
     print( roi_names1)
