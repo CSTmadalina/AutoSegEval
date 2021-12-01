@@ -1,0 +1,202 @@
+#dosimetricimpact auto contouring 
+
+import numpy as np
+import matplotlib as plt
+from scipy.interpolate import Rbf, InterpolatedUnivariateSpline
+import matplotlib.pyplot as plt
+from scipy.interpolate import interp1d
+import xlsxwriter
+import os 
+from os.path import join as pjoin
+from openpyxl import Workbook
+
+wb = Workbook()
+# grab the active worksheet
+ws = wb.active
+#first_line = file.readline()
+#print(first_line)
+#print(file.name)
+
+filename = ("ADMIREauto_contouring/TestSET/DVH_Admire/2020512_39PartialArcaAdmire_DVH_1.txt")
+
+file = open(filename, "r", encoding='latin1')
+base = os.path.basename(filename)
+file_name = os.path.splitext(base)[0]
+print(file_name)
+
+
+startRead = False
+mainDict = {}
+for line in file:  
+    if line.startswith("Patient ID:"):
+        mainDict["patientID"] = line.split(' ')[2]
+    if line.startswith("Structure Name "):
+        startRead = True
+    elif startRead:
+        words = list(filter(None, line.split('   ')))
+        if len(words) != 3:
+            continue
+        if not words[0] in mainDict:
+            mainDict[words[0]] = {}
+            mainDict[words[0]]["Dose Gy"] = []
+            mainDict[words[0]]["%Volume"] = []
+        #mainDict[words[0]]["Dose Gy"]  += [float(words[1])]
+        mainDict[words[0]]["Dose Gy"]  += [float(words[1])/100] 
+        #devided by 100 was transformed to Gy. for Lyon008 manual plan
+        mainDict[words[0]]["%Volume"] += [float(words[2][:-1])]
+        
+file.close()
+print(mainDict["patientID"])
+
+#grab the active worksheet
+ws['A1'] = ('PatientID')
+ws['A2'] = (mainDict["patientID"])
+ws['B1'] = (file_name)
+ws['D1'] = ("")
+ws['E1'] = ("")
+ws['B2']= ('Number of structures:') 
+ws['C2'] = (str(len(mainDict)))
+ws['B3']= ("Structure Name")
+ws['C3']= ("Dmean")
+ws['D3']= ("Unit")
+ws['E3']= ("Dmed")
+ws['F3']= ("Unit")
+ws['G3']= ('D95%')
+ws['H3']= ("Unit")
+ws['I3']= ("D90%")
+ws['J3']= ("Unit")
+ws['K3']= ("D50%")
+ws['L3']= ("Unit")
+ws['M3']= ("D7%")
+ws['N3']= ("Unit")
+ws['O3']= ("D5%")
+ws['P3']= ("Unit")
+ws['Q3']= ("D2%")
+ws['R3']= ("D98%")
+ws['S3']= ("")
+ws['T3'] =("HI1" )
+ws['T2'] = ("HI2= D2% - D98% / Dmean")
+ws['T1'] = ("HI1 = D5% - D95% / Dmean")
+ws['T3'] = ("HI3 = D5% / D95%")
+
+ws['W2']=("TVRI %")
+ws['W3']=("% V66.5Gy")
+ws['X3'] = ("% V63Gy")
+ws['Y3'] = (" % V70Gy")
+ws['Z3'] = ("% V60Gy")
+ws['AA3'] = ("% V55Gy")
+ws['AB3'] = ("% V50Gy")
+ws['AC3'] = ("% V35Gy")
+ws['AD3'] = ("% V30Gy")
+ws['AE3'] = ("% V25Gy")
+ws['AF3'] = ("% V7Gy")
+ws['AG3'] = ("% V3.5Gy")
+ws['AH3'] = ("% V73.5Gy")
+ws['AI3'] = ("% V68.6GY")
+ws['AJ3'] = ("V51.53 Gy")
+ws['AK3'] = ("V54.25 Gy")
+ws['AL3'] = ("V56.9625Gy")
+ws['AM3']= ("V45Gy")
+
+ws['AN3']= ("V107Gy")
+ws['AO3']= ("V37.05Gy")
+
+
+
+#write in excel sheet
+
+for struct, indexKey in zip(mainDict, range(len(mainDict.keys()))):
+    if struct == 'patientID':
+        continue
+    x= np.array(mainDict[struct]["Dose Gy"])
+    y= np.array(mainDict[struct]["%Volume"])
+    diff = np.zeros(len(y))
+    for index in range(2,len(y)):
+        diff[index] = y[index]-y[index-1]
+        
+    Dmean=np.average(x, axis=None, weights=diff,returned=False) 
+    Dmed = np.median(x)  
+    f = interp1d(y,x,fill_value="extrapolate") 
+    f1 = interp1d(x,y,fill_value="extrapolate")
+    hi1 = (f(5)-f(95))/Dmean
+    hi2 = (f(2)-f(98))/Dmean
+    hi3 = f(5)/f(95)
+    D2 = f(2)
+    D5 = f(5)
+    D7 = f(7)
+    D50 = f(50)
+    D95 = f(95)
+    D98 = f(98)
+    D90 = f(90)
+    V95 = f1(66.5)
+    V90 = f1(63) 
+    V70Gy = f1(70)
+    V60Gy = f1(60)
+    V50Gy = f1(50)
+    V55Gy = f1(55)
+    V30Gy = f1(30)
+    V35Gy = f1(35)
+    V25Gy = f1(25)
+    V10 = f1(7)
+    V5 = f1(3.5)
+    V105 = f1(73.5)
+    V107 = f1(74.9)
+    V98 = f1(68.6)
+    V45Gy = f1(45)
+    V5153Gy = f1(51.53)
+    V5425Gy = f1(54.25)
+    V5696Gy = f1(56.9625)
+    V45Gy = f1(45)    
+    V3705 = f1(37.05)
+    
+    ws.cell(column = 1, row = 3+indexKey+1, value= indexKey+1)
+    ws.cell(column = 2, row = 3+indexKey+1, value = struct)
+    ws.cell(column = 3, row = 3+indexKey+1, value = '%.4f' %Dmean)
+    ws.cell(column = 4, row = 3+indexKey+1, value = "Gy")
+    ws.cell(column = 5, row = 3+indexKey+1, value= '%.4f' %Dmed)
+    ws.cell(column = 6, row = 3+indexKey+1, value = "Gy")
+    
+    ws.cell(column = 7, row = 3+indexKey+1, value = '%.4f' %D95)
+    ws.cell(column = 8, row = 3+indexKey+1, value = "Gy")
+    ws.cell(column = 9, row = 3+indexKey+1, value = '%.4f' %D90)
+    ws.cell(column = 10, row = 3+indexKey+1, value = "Gy")
+    ws.cell(column = 11, row = 3+indexKey+1, value = '%.4f' %D50)
+    ws.cell(column = 12, row = 3+indexKey+1, value = "Gy" )
+    ws.cell(column = 13, row = 3+indexKey+1, value = '%.4f' %D7)
+    ws.cell(column = 14, row = 3+indexKey+1, value = "Gy")   
+    ws.cell(column = 15, row = 3+indexKey+1, value = '%.4f' %D5)
+    ws.cell(column = 16, row = 3+indexKey+1, value = "Gy")        
+    ws.cell(column = 17, row = 3+indexKey+1, value = '%.4f' %D2)
+    ws.cell(column = 18, row = 3+indexKey+1, value = '%.4f' %D98) 
+    
+    ws.cell(column = 20, row = 3+indexKey+1, value = '%.4f' %hi1)
+    ws.cell(column = 21, row = 3+indexKey+1, value = '%.4f' %hi2)
+    ws.cell(column = 22, row = 3+indexKey+1, value = '%.4f' %hi3)
+    
+    
+    ws.cell(column = 23, row = 3+indexKey+1, value = '%.4f' %V95)        
+    ws.cell(column = 24, row = 3+indexKey+1, value = '%.4f' %V90)
+    ws.cell(column = 25, row = 3+indexKey+1, value = '%.4f' %V70Gy)
+    ws.cell(column = 26, row = 3+indexKey+1, value = '%.4f' %V60Gy)
+    ws.cell(column = 27, row = 3+indexKey+1, value = '%.4f' %V55Gy)
+    ws.cell(column = 28, row = 3+indexKey+1, value = '%.4f' %V50Gy)
+    ws.cell(column = 29, row = 3+indexKey+1, value = '%.4f' %V35Gy)
+    ws.cell(column = 30, row = 3+indexKey+1, value = '%.4f' %V30Gy)
+    ws.cell(column = 31, row = 3+indexKey+1, value = '%.4f' %V25Gy)
+    ws.cell(column = 32, row = 3+indexKey+1, value = '%.4f' %V10)
+    ws.cell(column = 33, row = 3+indexKey+1, value = '%.4f' %V5)
+    ws.cell(column = 34, row = 3+indexKey+1, value = '%.4f' %V105)
+    ws.cell(column = 35, row = 3+indexKey+1, value = '%.4f' %V98)
+    ws.cell(column = 36, row = 3+indexKey+1, value = '%.4f' %V5153Gy)
+    ws.cell(column = 37, row = 3+indexKey+1, value = '%.4f' %V5425Gy)
+    ws.cell(column = 38, row = 3+indexKey+1, value = '%.4f' %V5696Gy)
+    ws.cell(column = 39, row = 3+indexKey+1, value = '%.4f' %V45Gy)
+    ws.cell(column = 40, row = 3+indexKey+1, value = '%.4f' %V107)  
+    ws.cell(column = 41, row = 3+indexKey+1, value = '%.4f' %V3705) 
+ 
+   
+output_path = pjoin("ADMIREauto_contouring","TestSET", "DVH_Admire", "DVH_" + file_name + ".xlsx" )    
+
+
+wb.save(output_path)
+    
