@@ -1,0 +1,64 @@
+import gatetools as gt
+import os
+import sys
+import itk
+import pydicom
+import tqdm
+import numpy as np
+import SimpleITK as sitk
+import matplotlib.pylab as plt
+
+
+outputConversionPath = os.path.join("ADMIREauto_contouring/TestSET/Test002")
+CT_folder =  "ADMIREauto_contouring/TestSET/Test002/CT/"
+CT_files = []
+for root, dirs, files in os.walk(CT_folder):
+    for file in files:
+        if file.endswith(".dcm"):
+            CT_files.append(os.path.join(root, file))
+
+CT = gt.read_dicom(CT_files)
+itk.imwrite(CT, os.path.join(outputConversionPath, "CT.mhd"))
+
+RTS_path = os.path.join("ADMIREauto_contouring/TestSET/Test002/RTS_MIM_MV/") 
+#RTS_path_Manual = os.path.join("ADMIREauto_contouring/TestSET/Test018/RTS_MANUAL_REF/") 
+#RTS_path = os.path.join("ADMIREauto_contouring/TestSET/Test019/RTS_ARTPLAN_OARs/") 
+#RTS_path = os.path.join("ADMIREauto_contouring/TestSET/Test018/RTS_EKTDL/") 
+#RTS_path = os.path.join("ADMIREauto_contouring/TestSET/Test015/RT/") 
+#RTS_path = os.path.join("ADMIREauto_contouring/TestSET/Test018/RTS_RF/") 
+#RTS_path = os.path.join("ADMIREauto_contouring/TestSET/Test006/RTS_MIM_OARs/")
+#RTS_path = os.path.join("ADMIREauto_contouring/TestSET/Test019/RTS_CLB_DL63/")
+#RTS_path = os.path.join("ADMIREauto_contouring/TestSET/Test004/RTS_CLB_DL70/")
+#RTS_path = os.path.join("ADMIREauto_contouring/TestSET/Test004/RTS_RF_corr/")
+#RTS_path = os.path.join("ADMIREauto_contouring/TestSET/Test001/RTS_ARTplan_corr/")
+#RTS_path = os.path.join("ADMIREauto_contouring/TestSET/Test001/CLB_2DL70/")
+#RTS_path = os.path.join("ADMIREauto_contouring/TestSET/Test001/RTS_CLB_70DL/")
+#RTS_path = os.path.join("ADMIREauto_contouring/TestSET/Test009/RTS_CLB_70DL_CORR/")
+#RTS_path = os.path.join("ADMIREauto_contouring/TestSET/Test013/RTS_CLB_84DL/")
+#RTS_path = os.path.join("ADMIREauto_contouring/TestSET/Test018/RTS_MIM_CTVn2-4/")
+#RTS_path = os.path.join("ADMIREauto_contouring/TestSET/Test019/RTS_CLB_CTVN_24DL/")
+
+
+
+for root, dirs, files in os.walk(RTS_path):
+    for file in files:
+        if file.startswith("RTS_MIM_10MV_2020502") and file.endswith(".dcm"):
+            structset = pydicom.read_file(os.path.join(root,file), force=True)
+            roi_names = gt.list_roinames(structset)
+            sort_roi_names=np.sort(roi_names)
+            print(sort_roi_names)
+#Convert struct 
+pbar = tqdm.tqdm(total=len(sort_roi_names))
+for roi_name in sort_roi_names:
+    print(roi_name)
+    aroi = gt.region_of_interest(structset, roi_name)
+    mask = aroi.get_mask(CT, corrected=False)
+    try:
+        itk.imwrite(mask, os.path.join(RTS_path, roi_name + ".mhd" ))
+    except:
+        print("error for " + roi_name)
+    
+   
+
+    pbar.update(1)
+pbar.close
