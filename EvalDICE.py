@@ -134,30 +134,53 @@ for folder in patientFolders:
                 masks_float = itk.cast_image_filter(masks, ttype=(itk.Image[itk.UC, 3], itk.Image[itk.F, 3]))
                 masks1_float = itk.cast_image_filter(masks1, ttype=(itk.Image[itk.UC, 3], itk.Image[itk.F, 3]))
 
-                filter = itk.HausdorffDistanceImageFilter[itk.Image[itk.F,3],itk.Image[itk.F,3]].New()
-                filter.SetInput1(masks_float)    
-                filter.SetInput2(masks1_float)
-                filter.SetUseImageSpacing(True)
-                filter.Update() 
+                #filter = itk.HausdorffDistanceImageFilter[itk.Image[itk.F,3],itk.Image[itk.F,3]].New()
+                #filter.SetInput1(masks_float)    
+                #filter.SetInput2(masks1_float)
+                "filter.SetUseImageSpacing(True)
+                "filter.Update() 
 
-                HD = filter.GetHausdorffDistance()
-                AVHD = filter.GetAverageHausdorffDistance() 
+                #HD = filter.GetHausdorffDistance()
+                #AVHD = filter.GetAverageHausdorffDistance() 
 
                 intersectionArray = np.multiply(itk.array_view_from_image(masks),  itk.array_view_from_image(masks1))
                 intersection = np.sum(intersectionArray)
                 dice = 2.0*intersection/(nbVoxelRoi + nbVoxelRoi1 )
+                distances = {}           
+                metrics = [metric.DiceCoefficient(), metric.HausdorffDistance(percentile=100, metric='HDmax'),metric.HausdorffDistance(percentile=95, metric='HD95'),metric.HausdorffDistance(percentile=50, metric='HD50'),metric.VolumeSimilarity(metric='VO')]
+                metricHD95 = 0
+                metricHD50 = 0
+                labels = {1: sort_roi_names[i] }
+                evaluator = eval_.SegmentationEvaluator(metrics, labels)
+                ground_truth = sitk.ReadImage(os.path.join(RTSPath, sort_roi_names[i] + ".mhd"))
+                prediction = sitk.ReadImage(os.path.join(RTSPath1, sort_roi_names[i] + ".mhd"))
+                evaluator.evaluate(prediction, ground_truth, "T")
+                for r in evaluator.results:
+                    if "HDmax" in r.metric:
+                        metricHDmax = r.value
+                    elif "HD95" in r.metric:
+                        metricHD95 = r.value
+                for r in evaluator.results:
+                    if "HD50" in r.metric:
+                        metricHD50 = r.value
+                    elif "VO" in r.metric:
+                        metricVO = r.value
+                    
+                #print(metricHDmax, metricHD95, metricHD50, metricVO)
                 
-                print(indexKey, sort_roi_names[i], volumeRoi, volumeRoi1, '%.4f' %dice, '%.4f' %HD )
+               
+                
+                print(indexKey, sort_roi_names[i], volumeRoi, volumeRoi1, '%.4f' %dice, '%.4f' %metricHDmax, '%.4f' %metricHD95,'%.4f' %metricHD50,'%.4f' %metricVO )
                 ws.cell(column = 1, row = 3+indexKey+1, value = indexKey)
                 ws.cell(column = 2, row = 3+indexKey+1, value = sort_roi_names[i])
                 ws.cell(column = 3, row = 3+indexKey+1, value = 'cm3')
                 ws.cell(column = 4, row = 3+indexKey+1, value = '%.4f' %volumeRoi)
                 ws.cell(column = 5, row = 3+indexKey+1, value = '%.4f' %volumeRoi1)
                 ws.cell(column = 6, row = 3+indexKey+1, value = '%.4f' %dice)
-                ws.cell(column = 7, row = 3+indexKey+1, value = '%.4f' %HD)
-                ws.cell(column = 8, row = 3+indexKey+1, value =  " ")
-                ws.cell(column = 9, row = 3+indexKey+1, value = " ")
-
+                ws.cell(column = 7, row = 3+indexKey+1, value = '%.4f' %metricHDmax)
+                ws.cell(column = 8, row = 3+indexKey+1, value =  '%.4f' %metricHD95)
+                ws.cell(column = 9, row = 3+indexKey+1, value = '%.4f' %metricHD50)
+                ws.cell(column = 10, row = 3+indexKey+1, value = '%.4f' %metricVO)
                 indexKey = indexKey+1
 
 
