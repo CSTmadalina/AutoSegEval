@@ -1,0 +1,121 @@
+# Read RTS and rename ROI from a dictionary
+# DELETTE OTHER ROI that are not in the list
+
+
+import os
+import click
+import itk
+import gatetools as gt
+import re
+import subprocess
+import pydicom
+import json
+import numpy as np
+import jellyfish 
+from os.path import join as pjoin
+
+
+mainDict = {
+    "Patient" : ["PATIENT","PATIENT_1",],
+    "Trachea":["TRACHEE","TRACHEA_1"],
+    "Esophagus" :  ["OESOPHAGE", "ESOPHAGUS_1"],
+    "Larynx": ["LARYNX", "LARYNX_1"],
+    "Parotid_L": [ "PAROTIDEG","PAROTID_L_1" ],
+    "Parotid_R": [ "PAROTIDED" ,"PAROTID_R_1"],
+    "ConstrMuscle": ["CONSTRMUSCLE_1"],
+    "SpinalCord" : ["MOELLE","SPINALCORD_1"],
+    "BrainStem": [ "TRONCCEREBRAL", "BRAINSTEM_1"],
+    "Thyroid": [ "THYROIDE", "THYROID_1"],
+    "Cochlea_L": ["COCHLEEG","COCHLEA_L_1"],
+    "Cochlea_R": ["COCHLEED","COCHLEA_R_1"],
+    "OralCavity": ["CAVITEBUCCALE","ORALCAVITY_1"],
+    "Submandibular_L": ["GLANDESOUSMAXG", "SUBMANDIBULAR_L_1"],
+    "Submandibular_R": ["GLANDESOUSMAXD","SUBMANDIBULAR_R_1" ],
+    "Mandible": ["MANDIBULE", "MANDIBLE_1"],
+    "Eye_R" : ["OEILD", "EYE_R_1"],
+    "Eye_L" : ["OEILG", "EYE_L_1"],
+    "OpticNerve_L" : ["NOG","OPTICNERVE_L_1"],
+    "OpticNerve_R" : ["NOD", "OPTICNERVE_R_1"]
+
+} 
+                            
+def distanceIdentifyStruct(roi):
+    distances = {}
+    minKey = list(mainDict.keys())[0]
+    for key in mainDict:
+        distances[key] = 1e12
+        for roiModel in mainDict[key]:
+            distances[key] = min(distances[key], jellyfish.levenshtein_distance(roiModel, roi))
+        if distances[minKey] > distances[key]:
+            minKey = key
+    return(minKey)
+
+def identifyStruct(roi):
+    for key in mainDict:
+        if roi in mainDict[key]:
+            return key                     
+    print("Warning roi:" + roi)
+    
+rtstructFiles = []
+for root, dirs, files in os.walk('ADMIREauto_contouring/TestSET/TEST015'):
+    for file in files:
+        if file.startswith("2020515_StrctrSets_s2") and file.endswith(".dcm"):
+            rtstructFiles += [os.path.join(root, file),]   
+print(len(rtstructFiles))        
+
+for file in rtstructFiles: 
+    ds = pydicom.read_file(file, force = True)
+    print(ds.data_element('PatientID'))
+    roi_names = gt.list_roinames(ds)
+    for name in roi_names:
+        found_name = identifyStruct(name.upper())   
+        print(found_name)
+    for element in ds[(0x3006, 0X0020)]:
+        element[(0x3006, 0x0026)].value = identifyStruct(element[(0x3006, 0x0026)].value.upper())     
+    
+    patientId = ds[(0x0010, 0x0020)].value
+    output_path = pjoin("ADMIREauto_contouring","TestSET","TEST015","RTS_1_" + patientId + ".dcm" )    
+    ds.save_as(output_path)
+
+ds = pydicom.read_file(output_path, force = True)
+for element in ds:
+    print(element)
+print(len(ds.StructureSetROISequence))
+indexRoiToRemove = []
+delStructureSetROIIndex = []
+for element, index in zip(ds[(0x3006, 0X0020)], range(len(ds[(0x3006, 0X0020)].value))):
+    if element[(0x3006, 0x0026)].value == "":
+        indexRoiToRemove += [int(element[(0x3006, 0x0022)].value)]
+        delStructureSetROIIndex += [index]
+print(indexRoiToRemove)
+delStructureSetROIIndex.reverse()
+print(delStructureSetROIIndex)
+for index in delStructureSetROIIndex:
+    del ds[(0x3006, 0X0020)].value[index]
+delROIContourIndex = []
+for element, index in zip(ds[(0x3006, 0X0039)], range(len(ds[(0x3006, 0X0039)].value))):
+    if int(element[(0x3006, 0x0084)].value) in indexRoiToRemove:
+        delROIContourIndex += [index]
+delROIContourIndex.reverse()
+print(delROIContourIndex)
+for index in delROIContourIndex:
+    del ds[(0x3006, 0X0039)].value[index]
+#del RT ROI Observations
+delRTROIObservationsIndex = []
+for element, index in zip(ds[(0x3006, 0X0080)], range(len(ds[(0x3006, 0X0080)].value))):
+    if int(element[(0x3006, 0x0084)].value) in indexRoiToRemove:
+        delRTROIObservationsIndex += [index]
+delRTROIObservationsIndex.reverse()
+print(delRTROIObservationsIndex)
+for index in delRTROIObservationsIndex:
+    del ds[(0x3006, 0X0080)].value[index]
+patientId = ds[(0x0010, 0x0020)].value
+   
+ds.save_as(output_path)
+#change the UID of the RTS with the new ROI names 
+ds[(0x008, 0X0018)].value = generate_uid()
+ds.save_as(output_path)
+print(len(ds.StructureSetROISequence))
+for element in ds[(0x3006, 0x0020)]:
+    print(element[(0x3006, 0x0026)])        
+    
